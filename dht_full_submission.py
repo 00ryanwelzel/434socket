@@ -184,6 +184,15 @@ def candidate_dataset_paths(year: str) -> List[Path]:
 
 def find_dataset(year: str) -> Path:
     """Locate the storm dataset file for the requested year."""
+    preferred_plain = [
+        Path.cwd() / f"details-{year}.csv",
+        Path(__file__).resolve().parent / f"details-{year}.csv",
+        Path(__file__).resolve().parent / "data" / f"details-{year}.csv",
+    ]
+    for path in preferred_plain:
+        if path.exists():
+            return path
+
     for path in candidate_dataset_paths(year):
         if "*" in str(path):
             matches = sorted(path.parent.glob(path.name))
