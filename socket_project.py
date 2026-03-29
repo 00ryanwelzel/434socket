@@ -990,7 +990,7 @@ class DHTPeer:
     def _on_reset_done(self, msg, addr):
         self._reset_complete.set()
 
-    def _on_rebuild_dht(self, msg, addr):
+    def _do_rebuild_dht(self, msg, addr):
         ring = [dict_to_peer_tuple(x) for x in msg["ring"]]
         self.current_year = str(msg["year"])
         if not ring or ring[0].name != self.name:
@@ -1012,6 +1012,9 @@ class DHTPeer:
             "year": self.current_year,
         }, "REBUILD_DONE")
 
+    def _on_rebuild_dht(self, msg, addr):
+        threading.Thread(target=self._do_rebuild_dht, args=(msg, addr), daemon=True).start()
+
     def _on_rebuild_done(self, msg, addr):
         self._rebuild_result = {
             "new_leader": str(msg["new_leader"]),
@@ -1021,17 +1024,18 @@ class DHTPeer:
         self.current_year = self._rebuild_result["year"]
         self._rebuild_done.set()
 
-    def _on_join_request(self, msg, addr):
+    def _do_join_request(self, msg, addr):
         if self.my_id != 0 or not self.ring:
             return
 
         joiner = dict_to_peer_tuple(msg["joiner"])
         self.current_year = str(msg["year"])
+        old_ring = list(self.ring)
         self._teardown_complete.clear()
         self._start_teardown(self.name)
         self._teardown_complete.wait(timeout=20.0)
 
-        new_ring = list(self.ring) + [joiner]
+        new_ring = old_ring + [joiner]
         self.update_ring(new_ring, 0)
         self.send_peer(joiner, {
             "cmd": "SET_ID",
@@ -1050,6 +1054,9 @@ class DHTPeer:
             "ring_names": [p.name for p in new_ring],
             "year": self.current_year,
         }, "REBUILD_DONE")
+
+    def _on_join_request(self, msg, addr):
+        threading.Thread(target=self._do_join_request, args=(msg, addr), daemon=True).start()
 
     def print_query_result(self, result):
         if not result.ok or not result.record:
